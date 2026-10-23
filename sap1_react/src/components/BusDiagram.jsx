@@ -8,6 +8,7 @@ export default function BusDiagram({ source, destination, value }) {
         <span>05</span>
         <h2>W-Bus activity</h2>
       </div>
+
       <svg
         className="bus-diagram"
         viewBox="0 0 720 190"
