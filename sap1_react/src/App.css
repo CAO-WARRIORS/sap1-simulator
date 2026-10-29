@@ -61,6 +61,7 @@ button:disabled {
   display: flex;
   justify-content: space-between;
   gap: 24px;
+  min-width: 0;
   border-bottom: 1px solid var(--line);
   padding-bottom: 26px;
   align-items: flex-end;
@@ -145,10 +146,7 @@ h2 {
 }
 .hardware-chain > .register {
   display: grid;
-  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(
-      80px,
-      auto
-    );
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 12px;
   align-items: center;
 }
@@ -248,6 +246,7 @@ h2 {
 }
 .panel,
 .control-panel {
+  min-width: 0;
   background: rgba(251, 252, 248, 0.84);
   border: 1px solid var(--line);
   padding: 19px;
@@ -295,7 +294,7 @@ h2 {
 }
 .formula-inputs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 label {
@@ -349,7 +348,7 @@ textarea {
 }
 .register-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 9px;
 }
 .register {
@@ -407,7 +406,7 @@ textarea {
 }
 .led-row {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(8, minmax(0, 1fr));
   gap: 10px;
   max-width: 610px;
 }
@@ -447,7 +446,7 @@ textarea {
 }
 .signal-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
   gap: 8px;
 }
 .signal {
@@ -535,6 +534,7 @@ tbody th {
   align-items: center;
 }
 .control-panel button {
+  flex: 1 1 auto;
   font-size: 0.78rem;
 }
 .control-hint,
@@ -617,6 +617,31 @@ tbody th {
     grid-template-columns: repeat(3, 1fr);
   }
 }
+@media (max-width: 700px) {
+  .app-shell {
+    padding-top: 24px;
+  }
+  .workspace {
+    gap: 18px;
+  }
+  .panel,
+  .control-panel {
+    padding: 15px;
+  }
+  .mode-tabs {
+    margin-left: -15px;
+    margin-right: -15px;
+    padding-left: 15px;
+    padding-right: 15px;
+  }
+  .led-row {
+    grid-template-columns: repeat(8, minmax(24px, 1fr));
+    gap: 6px;
+  }
+  .signal-grid {
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+  }
+}
 @media (max-width: 580px) {
   .app-shell {
     padding: 22px 13px 46px;
@@ -628,8 +653,25 @@ tbody th {
   .register-grid {
     grid-template-columns: repeat(2, 1fr);
   }
+  .hardware-chain > .register {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .hardware-chain > .register span {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .hardware-chain > .register strong {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .hardware-chain > .register .register__name {
+    grid-row: 1 / span 2;
+  }
+  .formula-inputs {
+    grid-template-columns: 1fr;
+  }
   .signal-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
   .control-panel {
     align-items: stretch;
