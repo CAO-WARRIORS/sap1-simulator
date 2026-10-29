@@ -132,6 +132,115 @@ h2 {
   margin-top: 24px;
   align-items: start;
 }
+.machine-view {
+  min-width: 0;
+}
+.hardware-chain {
+  display: grid;
+  gap: 14px;
+}
+.hardware-chain > .register,
+.hardware-chain > .panel {
+  min-width: 0;
+}
+.hardware-chain > .register {
+  display: grid;
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 1fr) minmax(
+      80px,
+      auto
+    );
+  gap: 12px;
+  align-items: center;
+}
+.hardware-chain > .register .register__name,
+.hardware-chain > .register strong,
+.hardware-chain > .register span {
+  margin: 0;
+}
+.hardware-chain > .memory-panel,
+.hardware-chain > .ir-panel,
+.hardware-chain > .controller-panel,
+.hardware-chain > .arithmetic-panel,
+.hardware-chain > .output-panel {
+  width: 100%;
+}
+.ir-panel__nibbles {
+  display: flex;
+  gap: 14px;
+  color: var(--muted);
+  font: 0.72rem var(--mono);
+  margin-top: 8px;
+}
+.ir-panel__nibbles span {
+  margin: 0;
+}
+.loader-copy,
+.program-memory-map {
+  color: var(--muted);
+  font: 0.74rem/1.6 var(--mono);
+}
+.program-memory-map {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  padding: 9px;
+  margin-bottom: 13px;
+}
+.program-memory-map b {
+  color: var(--teal);
+}
+.address-inputs {
+  margin-top: 10px;
+}
+.sample-button {
+  margin-top: 15px;
+  width: 100%;
+}
+.arithmetic-panel__mode,
+.arithmetic-panel__binary,
+.arithmetic-panel__hex,
+.wbus-panel strong,
+.wbus-panel > span {
+  display: block;
+  font-family: var(--mono);
+}
+.arithmetic-panel__mode {
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+.arithmetic-panel__mode b {
+  color: var(--orange);
+}
+.arithmetic-panel__binary {
+  margin-top: 12px;
+  font-size: 1.15rem;
+}
+.arithmetic-panel__hex,
+.wbus-panel > span {
+  color: var(--teal);
+  margin-top: 6px;
+  font-size: 0.8rem;
+}
+.arithmetic-panel--active {
+  border-color: var(--orange);
+  background: #fff7e5;
+}
+.wbus-panel {
+  border-color: var(--orange);
+}
+.wbus-panel__line {
+  height: 12px;
+  border-radius: 6px;
+  background: var(--line);
+  margin: 12px 0;
+}
+.wbus-panel--active .wbus-panel__line {
+  background: var(--orange);
+  box-shadow: 0 0 14px rgba(231, 111, 56, 0.55);
+}
+.wbus-panel strong {
+  font-size: 0.82rem;
+}
 .sidebar,
 .machine-view {
   display: grid;
@@ -427,6 +536,20 @@ tbody th {
 }
 .control-panel button {
   font-size: 0.78rem;
+}
+.control-hint,
+.reset-note {
+  width: 100%;
+  color: var(--muted);
+  font: 0.72rem var(--mono);
+  margin: 0;
+}
+.control-hint {
+  color: var(--orange);
+}
+.reset-note {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
 }
 .speed {
   display: flex;

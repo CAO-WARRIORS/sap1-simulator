@@ -9,9 +9,9 @@ SAP-1 Studio is a browser-based visual simulator for the Simple-As-Possible 1 co
 - 16 memory locations with binary, hexadecimal, disassembly, PC pointer, and MAR access highlighting.
 - Pure SAP-1 engine separated from React rendering, including immutable state transitions and T1-T6 micro-steps.
 - LDA, ADD, SUB, OUT, HLT, illegal-opcode errors, 8-bit masking, and two's-complement subtraction.
-- Formula loader for `A + B - C`, `A + B + C`, and `A - B - C`, with independent expected-result checks.
+- Formula loader with independent `Operation 2` and `Operation 3` ADD/SUB dropdowns for `A + B - C`, `A + B + C`, `A - B - C`, and `A - B + C`.
 - Custom assembly or eight-bit machine-code loader with line-level errors.
-- Run, pause, instruction step, micro-step, reset, clock speed, execution log, bus diagram, signal lamps, and output LEDs.
+- Run ticks one T-state per clock interval, stops at HLT or errors, and has a 6000-T-state safety limit. Instruction step, micro-step, reset, clock speed, signal lamps, and output LEDs are also available.
 - Keyboard-accessible controls, focus states, live status updates, responsive layout, and reduced-motion support.
 
 ## Language And Framework
@@ -34,12 +34,11 @@ Open the local Vite URL printed by `npm run dev`.
 
 ## User Guide
 
-1. Select Formula or Custom assembly in the Load program panel.
-2. For a formula, choose HEX or DEC, enter A, B, and C, then choose the expression.
-3. Select Load program. The memory image is placed at addresses `0H` through `FH`; formula data uses `9H`, `AH`, and `BH`.
-4. Use Step instruction to complete one fetch-decode-execute instruction, or Micro-step to advance one T-state.
-5. Use Run to execute until HLT, Pause to stop the timer, and Reset to clear registers, output, and execution state.
-6. Compare Expected and Actual in the result panel. The output LEDs show bit 7 through bit 0, and the carry indicator shows the most recent arithmetic carry/borrow state.
+1. Enter hexadecimal A, B, and C data values and choose the `Operation 2` and `Operation 3` ADD/SUB dropdowns.
+2. Select Load program. The memory image is placed at addresses `0H` through `FH`; data addresses must be distinct and from `5H` through `FH`.
+3. Use Step instruction to complete one fetch-decode-execute instruction, or Micro-step to advance one T-state.
+4. Use Run to execute one T-state per clock interval until HLT. Reset clears execution state while keeping the loaded program in RAM.
+5. Compare Expected and Actual in the result panel. The expected result is shown in hex and binary, and the output LEDs show bit 7 through bit 0.
 
 ## Instruction Set
 
@@ -82,6 +81,8 @@ For `25H + 05H - 23H`:
 | T6 SUB         | `A <- A - B`        | `Eu, La, Su`   |
 | T4 OUT         | `Output <- A`       | `Ea, Lo`       |
 | T4 HLT         | Stop clock          | `HLT`          |
+
+The controller signal set is `Ep, Lm, CE, Li, Ei, La, Ea, Eu, Su, Lb, Lo, Cp, HLT`. During T4 of LDA, ADD, and SUB, `Ei` enables the IR operand onto the W-Bus and `Lm` loads that operand into MAR.
 
 ## Worked Formula Examples
 

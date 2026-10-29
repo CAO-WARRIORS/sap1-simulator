@@ -13,9 +13,9 @@ The application source is in [`sap1_react`](sap1_react/). All commands below sho
 - 16 memory locations with binary, hexadecimal, disassembly, PC pointer, and MAR highlighting.
 - Pure SAP-1 engine separated from React rendering, with immutable state transitions and T1-T6 micro-steps.
 - LDA, ADD, SUB, OUT, HLT, illegal-opcode errors, eight-bit masking, and two's-complement subtraction.
-- Formula loader for `A + B - C`, `A + B + C`, and `A - B - C`.
-- Custom assembly or eight-bit machine-code loader with validation errors.
-- Run, pause, instruction step, micro-step, reset, adjustable clock speed, execution log, bus diagram, signal lamps, and output LEDs.
+- Formula loader with independent `Operation 2` and `Operation 3` ADD/SUB dropdowns for `A + B - C`, `A + B + C`, `A - B - C`, and `A - B + C`.
+- Validated hexadecimal data and memory-address inputs from `5H` through `FH`.
+- Run advances one T-state per clock interval, stops at HLT or CPU errors, and has a 6000-T-state safety limit. Instruction step, micro-step, reset, adjustable clock speed, signal lamps, and output LEDs are also available.
 - Keyboard-accessible controls, visible focus states, live status updates, responsive layout, and reduced-motion support.
 
 ## Language And Framework
@@ -44,13 +44,13 @@ Open the local Vite URL printed by `npm run dev`.
 
 ## User Guide
 
-1. Select Formula or Custom assembly in the Load program panel.
-2. For a formula, select HEX or DEC, enter values A, B, and C, and choose the expression.
-3. Select Load program. Formula instructions begin at `0H`; data is stored at `9H`, `AH`, and `BH`.
-4. Use Step instruction to complete one fetch-decode-execute instruction.
-5. Use Micro-step to advance one T-state and inspect the active control signals and bus transfer.
-6. Use Run to execute until HLT, Pause to stop the timer, and Reset to clear registers, output, and execution state.
-7. Compare Expected and Actual in the result panel. The output LEDs show bit 7 through bit 0, and the carry indicator shows the latest arithmetic carry or borrow state.
+1. Enter hexadecimal A, B, and C data values and choose the `Operation 2` and `Operation 3` ADD/SUB dropdowns.
+2. Select Load program. Instructions occupy `0H` through `4H`; data addresses must be distinct and from `5H` through `FH`.
+3. Use Step instruction to complete one fetch-decode-execute instruction.
+4. Use Step T-state to advance one micro-operation and inspect the active control signals and W-Bus transfer.
+5. Use Run to advance one T-state per clock interval until HLT, an error, or the safety limit.
+6. Use Reset to clear registers, output, bus, signals, and execution state while keeping the loaded program in RAM.
+7. Compare Expected and Actual in the result panel. Expected values are shown in hex and binary, and the output LEDs show bit 7 through bit 0.
 
 ## Instruction Set
 
@@ -94,6 +94,8 @@ For `25H + 05H - 23H`:
 | T4 OUT         | `Output <- A`       | `Ea, Lo`       |
 | T4 HLT         | Stop clock          | `HLT`          |
 
+The controller signal set is `Ep, Lm, CE, Li, Ei, La, Ea, Eu, Su, Lb, Lo, Cp, HLT`. During T4 of LDA, ADD, and SUB, `Ei` enables the IR operand onto the W-Bus and `Lm` loads that operand into MAR.
+
 ## Worked Formula Examples
 
 - `25H + 05H - 23H = 07H` (`0000 0111`).
@@ -118,8 +120,21 @@ sap1-simulator/
 			App.jsx
 			App.css
 			index.css
+			core/cpu.js
+			core/__tests__/cpu.test.js
 			hooks/useSap1.js
-			components/*.jsx
+			components/
+				RegisterPanel.jsx
+				IRPanel.jsx
+				RamViewer.jsx
+				ControllerPanel.jsx
+				AdderSubtractor.jsx
+				WBus.jsx
+				OutputLEDs.jsx
+				ControlsPanel.jsx
+				ProgramLoader.jsx
+				ResultCheck.jsx
+				ErrorBoundary.jsx
 			engine/constants.js
 			engine/format.js
 			engine/assembler.js
@@ -140,12 +155,12 @@ sap1-simulator/
 ## Demo Recording Script: 3-4 Minutes
 
 1. Introduce the register grid, RAM table, control lamps, W-Bus, output LEDs, and status badge.
-2. Enter `25`, `05`, and `23` in HEX, select `A + B - C`, and load the program.
-3. Use Micro-step through T1-T6 for `LDA 9H`, narrating PC to MAR, PC increment, RAM to IR, operand to MAR, RAM to A, and the no-op T6.
-4. Use Step instruction for ADD, SUB, and OUT, pointing to active lamps and the execution log.
-5. Run until HLT and show `07H`, `0000 0111`, PASS, and the stopped status.
-6. Reset, demonstrate `A + B + C`, then `A - B - C`, and show the updated LED values.
-7. Briefly load a custom program or illegal opcode to demonstrate validation and defensive error handling.
+2. Enter `25`, `05`, and `23`, leave the addresses at `9H`, `AH`, and `BH`, select `ADD` then `SUB`, and load the program.
+3. Use Step T-state through the fetch and LDA cycle, showing `IR -> W-BUS -> MAR` with `Ei` and `Lm` active.
+4. Use Step instruction for ADD, SUB, and OUT, pointing to the active controller signals and W-Bus transfers.
+5. Run at a visible clock speed until HLT and show `07H`, `0000 0111`, PASS, and the stopped status.
+6. Reset, demonstrate ADD-ADD and SUB-SUB through the two operation dropdowns, and show the updated LED values.
+7. Demonstrate an overflow case such as `FFH + 01H + 00H = 00H` and show the wrapped eight-bit result.
 
 ## Git Workflow
 

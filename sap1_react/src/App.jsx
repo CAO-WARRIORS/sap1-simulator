@@ -1,21 +1,23 @@
 import "./App.css";
-import BusDiagram from "./components/BusDiagram.jsx";
-import ControlPanel from "./components/ControlPanel.jsx";
-import ControlSignals from "./components/ControlSignals.jsx";
+import AdderSubtractor from "./components/AdderSubtractor.jsx";
+import ControllerPanel from "./components/ControllerPanel.jsx";
+import ControlsPanel from "./components/ControlsPanel.jsx";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
-import ExecutionLog from "./components/ExecutionLog.jsx";
-import LedRow from "./components/LedRow.jsx";
-import MemoryTable from "./components/MemoryTable.jsx";
+import IRPanel from "./components/IRPanel.jsx";
+import OutputLEDs from "./components/OutputLEDs.jsx";
 import ProgramLoader from "./components/ProgramLoader.jsx";
-import RegisterGrid from "./components/RegisterGrid.jsx";
+import RamViewer from "./components/RamViewer.jsx";
+import RegisterPanel from "./components/RegisterPanel.jsx";
 import ResultCheck from "./components/ResultCheck.jsx";
+import WBus from "./components/WBus.jsx";
 import { useSap1 } from "./hooks/useSap1.js";
 
 export default function App() {
-  const { state, actions, loadFormula, loadCustom } = useSap1();
+  const { state, actions, loadProgram } = useSap1();
   const { machine } = state;
-  const status =
-    machine.status === "Running" || state.running ? "Running" : machine.status;
+  const status = state.running ? "Running" : machine.status;
+  const opcode = (machine.ir >> 4) & 0x0f;
+  const arithmeticMode = opcode === 2 ? "SUB" : "ADD";
   return (
     <ErrorBoundary>
       <main className="app-shell">
@@ -40,38 +42,80 @@ export default function App() {
         </header>
         <div className="workspace">
           <aside className="sidebar">
-            <ProgramLoader
-              onFormula={loadFormula}
-              onCustom={loadCustom}
-              errors={state.errors}
-            />
+            <ProgramLoader onLoadProgram={loadProgram} errors={state.errors} />
             <ResultCheck
               expected={state.expected}
               actual={machine.output}
               status={machine.status}
             />
-            <ControlPanel
-              actions={actions}
+            <ControlsPanel
+              onStep={actions.step}
+              onStepTState={actions.microStep}
+              onRun={actions.run}
+              onReset={actions.reset}
+              programLoaded={state.programLoaded}
               running={state.running}
-              halted={machine.status === "Halted" || machine.status === "Error"}
+              halted={machine.halted || machine.error !== null}
               speed={state.speed}
+              onSpeedChange={actions.setSpeed}
             />
           </aside>
           <section className="machine-view">
-            <RegisterGrid machine={machine} />
-            <LedRow value={machine.output} />
-            <ControlSignals activeSignals={machine.activeSignals} />
-            <BusDiagram
+            <WBus
               source={machine.busSource}
               destination={machine.busDestination}
               value={machine.busValue}
             />
-            <MemoryTable
-              memory={machine.memory}
-              pc={machine.pc}
-              mar={machine.mar}
-            />
-            <ExecutionLog entries={machine.log} />
+            <div className="hardware-chain">
+              <RegisterPanel
+                name="PC"
+                value={machine.pc}
+                width={4}
+                changed={machine.changedRegisters.includes("PC")}
+              />
+              <RegisterPanel
+                name="MAR"
+                value={machine.mar}
+                width={4}
+                changed={machine.changedRegisters.includes("MAR")}
+              />
+              <RamViewer
+                memory={machine.memory}
+                pc={machine.pc}
+                accessedAddress={machine.mar}
+              />
+              <IRPanel
+                value={machine.ir}
+                changed={machine.changedRegisters.includes("IR")}
+              />
+              <ControllerPanel
+                tState={machine.tState}
+                instruction={machine.ir}
+                activeSignals={machine.activeSignals}
+                halted={machine.halted}
+              />
+              <RegisterPanel
+                name="Accumulator (A)"
+                value={machine.a}
+                changed={machine.changedRegisters.includes("A")}
+              />
+              <AdderSubtractor
+                value={machine.a}
+                mode={arithmeticMode}
+                enabled={machine.activeSignals.includes("Eu")}
+              />
+              <RegisterPanel
+                name="B Register"
+                value={machine.b}
+                changed={machine.changedRegisters.includes("B")}
+              />
+              <RegisterPanel
+                name="Output Register"
+                value={machine.output}
+                changed={machine.changedRegisters.includes("OUTPUT")}
+              />
+              <OutputLEDs value={machine.output} />
+            </div>
             {machine.error && (
               <div className="error-box error-box--large" role="alert">
                 {machine.error}
