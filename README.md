@@ -1,44 +1,38 @@
 # SAP-1 Simulator
 
-A web-based simulator of the SAP-1 (Simple-As-Possible 1) computer that visualizes registers, the W-Bus, and control signals through the fetch-decode-execute cycle. It is built for Computer Architecture and Organization coursework.
+A web-based simulator of the SAP-1 (Simple-As-Possible 1) computer. It visualizes the registers, W-Bus, RAM, control signals and output LEDs in the browser while running SAP-1 machine language programs through the fetch-decode-execute cycle. It was built for Computer Architecture and Organization.
 
 ![SAP-1 Simulator](./docs/screenshot.png)
 
 <!-- Add a project screenshot at ./docs/screenshot.png. -->
 
+**Demo video:** [Watch the demonstration](palagay url)
+
 ## Table of Contents
 
-- [1. Features](#1-features)
-- [2. Tech Stack and Justification](#2-tech-stack-and-justification)
-- [3. Getting Started](#3-getting-started)
-- [4. How to Use](#4-how-to-use)
-- [5. SAP-1 Architecture](#5-sap-1-architecture)
-- [6. Sample Programs](#6-sample-programs)
-- [7. Project Structure](#7-project-structure)
-- [8. Responsive Design Notes](#8-responsive-design-notes)
+- [1. Language and Web Framework](#1-language-and-web-framework)
+- [2. Installation and Running](#2-installation-and-running)
+- [3. Demonstration](#3-demonstration)
+- [4. Features](#4-features)
+- [5. How to Use](#5-how-to-use)
+- [6. SAP-1 Architecture](#6-sap-1-architecture)
+- [7. Sample Programs](#7-sample-programs)
+- [8. Project Structure](#8-project-structure)
 - [9. Testing](#9-testing)
 - [10. Team Members](#10-team-members)
 - [11. Acknowledgments](#11-acknowledgments)
 
-## 1. Features
+## 1. Language and Web Framework
 
-- 16 x 8-bit RAM viewer with current-address, read, and executed-address highlights.
-- PC, MAR, IR with split opcode and operand, Accumulator, B Register, ALU, and Output Register panels.
-- Animated W-Bus activity diagram with source, destination, value, and active control signals.
-- Eight output LEDs showing the Output Register value.
-- `Load Program`, `Step`, `Micro-step`, `Run`, `Pause`, `Reset`, and `Clear RAM` controls.
-- Clock speed slider from 100 ms to 1500 ms.
-- User-entered instructions and hexadecimal data values through the grid editor or quick-entry parser; program values are not hard-coded.
-- Instruction Table showing address, decoded instruction, and binary machine code.
-- Ring counter display for T1 through T6.
-- Plain white responsive UI for desktop, tablet, and mobile layouts.
+- **Language:** JavaScript (JSX)
+- **Framework:** React `^19.3.1`, built with Vite `^8.3.5`
 
-## 2. Tech Stack and Justification
+### Justification
 
-- **Language:** JavaScript and JSX
-- **Framework:** React `^19.3.1` with Vite `^8.3.5`
-
-React provides component-based register, RAM, editor, control, and output panels with reactive state updates. The reducer-based simulator state updates the interface as each micro-step changes the CPU. Vite provides a fast development server and production build, and the simulator runs entirely in the browser.
+- **Component-based UI:** Each part of the SAP-1 block diagram (PC, MAR, IR, Accumulator, B Register, Output Register, RAM viewer, output LEDs, controls) is its own React component. The code therefore mirrors the architecture diagram.
+- **Reactive state:** The simulator state is held in a reducer. Every micro-step updates the CPU state, and React re-renders the registers, RAM highlights, W-Bus and LEDs automatically, so the display is always in sync with the logic.
+- **Fast tooling:** Vite provides a quick development server and a production build.
+- **Browser-only:** The simulator runs entirely in the browser with no backend, and uses real graphical components (buttons, panels, LEDs), not a terminal interface.
 
 ### Dependencies
 
@@ -62,75 +56,101 @@ React provides component-based register, RAM, editor, control, and output panels
 | `vite`                        | `^8.3.5`   | Development server and production bundler  |
 | `vitest`                      | `^5.0.5`   | Unit test runner                           |
 
-## 3. Getting Started
+## 2. Installation and Running
 
 ### Prerequisites
 
-- Node.js 20.19+ or 22.12+ for Vite 8 compatibility
-- npm, included with Node.js
+- Node.js 20.19+ or 22.12+ (required by Vite 8)
+- npm (included with Node.js)
+- A modern web browser (Chrome, Firefox or Edge)
 
-The project does not define a Node.js engine in `package.json`.
-
-### Installation and development
+### Install dependencies
 
 ```bash
 git clone <repo-url>
 cd <project-folder>
 npm install
+```
+
+### Run the application
+
+```bash
 npm run dev
 ```
 
-Open the local URL printed by Vite, usually `http://localhost:5173`.
+Open the local URL printed in the terminal, usually `http://localhost:5173`.
 
-### Production build and preview
+### Production build (optional)
 
 ```bash
 npm run build
 npm run preview
 ```
 
-### Tests
+## 3. Demonstration
 
-```bash
-npm test
-```
+**Recorded demo:** [add link to video]
 
-## 4. How to Use
+The demo shows the simulator computing three different formulas, with the values typed in by the user and each result shown on the 8-LED output display:
 
-1. In **Program Editor**, enter instructions and hexadecimal data values in the grid, or switch to **Quick entry** and enter lines such as `0: LDA 9` and `9: 25H`.
-2. Click **Parse entries** when using quick entry, or choose one of the available presets.
+| #   | Formula         | Result | LEDs        |
+| --- | --------------- | ------ | ----------- |
+| 1   | 25H + 05H - 23H | `07H`  | `0000 0111` |
+| 2   | 12H + 08H       | `1AH`  | `0001 1010` |
+| 3   | 20H - 07H       | `19H`  | `0001 1001` |
+
+## 4. Features
+
+- 16 x 8-bit RAM viewer with current-address, read and executed-address highlights.
+- Separate panels for PC, MAR, IR (split into opcode and operand), Accumulator, B Register, ALU and Output Register, with values in binary and hexadecimal.
+- Animated W-Bus diagram showing source, destination, value and active control signals.
+- Eight output LEDs showing the Output Register in binary.
+- Ring counter display for T1 through T6.
+- Instruction Table showing address, decoded instruction and binary machine code.
+- Controls: `Load Program`, `Step`, `Micro-step`, `Run`, `Pause`, `Reset` and `Clear RAM`.
+- Clock speed slider from 100 ms to 1500 ms.
+- Instructions and hexadecimal data are entered by the user through the quick-entry parser. No program values are hard-coded.
+- Responsive layout for desktop (three columns), tablet (below 1200px, two columns) and mobile (below 768px, stacked panels with a sticky control bar).
+
+## 5. How to Use
+
+1. In **Program Editor**, enter instructions and hexadecimal data values in Quick entry, using lines such as `0: LDA 9` and `9: 25H`.
+2. Click **Parse entries**, or choose one of the presets.
 3. Click **Load Program** to copy the editor values into RAM.
-4. Use **Micro-step** to advance one T-state, **Step** to complete one instruction, or **Run** to advance automatically. While running, the button changes to **Pause**.
-5. Adjust the **Clock speed** slider to change the automatic micro-step interval.
-6. Watch the W-Bus, active control signals, RAM highlights, registers, instruction table, status text, and T1-T6 ring counter update.
+4. Run the program:
+   - **Micro-step** advances one T-state.
+   - **Step** completes one instruction.
+   - **Run** advances automatically until `HLT`, and changes to **Pause** while running.
+5. Adjust the **Clock speed** slider to change the automatic run speed.
+6. Watch the W-Bus, control signals, RAM highlights, registers, instruction table and T1-T6 ring counter update.
 7. Read the result in the **Output Register** and its eight LEDs.
-8. Click **Reset** to reset the registers while retaining the loaded RAM program. Use **Clear RAM** to remove the program and return to an empty simulator.
+8. Click **Reset** to clear the registers while keeping the loaded program. Click **Clear RAM** to remove the program.
 
-## 5. SAP-1 Architecture
+## 6. SAP-1 Architecture
 
 ### Components
 
-| Component                     | Size         | Role                                                                                      |
-| ----------------------------- | ------------ | ----------------------------------------------------------------------------------------- |
-| PC (Program Counter)          | 4 bits       | Selects the next RAM address and advances during fetch.                                   |
-| MAR (Memory Address Register) | 4 bits       | Holds the RAM address being accessed.                                                     |
-| RAM                           | 16 x 8 bits  | Stores instructions and data at hexadecimal addresses `0H` through `FH`.                  |
-| IR (Instruction Register)     | 8 bits       | Holds the fetched byte; its upper 4 bits are the opcode and lower 4 bits are the operand. |
-| Accumulator (A)               | 8 bits       | Holds the primary operand and ALU result.                                                 |
-| B Register                    | 8 bits       | Holds the second operand for `ADD` and `SUB`.                                             |
-| ALU                           | 8-bit result | Adds or subtracts A and B; `Su` selects subtraction.                                      |
-| Output Register               | 8 bits       | Receives A during `OUT` and drives the eight output LEDs.                                 |
-| Controller-Sequencer          | T1-T6        | Generates the current micro-step and control signals for fetch and execution.             |
+| Component                     | Size         | Role                                                                               |
+| ----------------------------- | ------------ | ---------------------------------------------------------------------------------- |
+| PC (Program Counter)          | 4 bits       | Selects the next RAM address and increments after each fetch.                      |
+| MAR (Memory Address Register) | 4 bits       | Holds the RAM address being accessed.                                              |
+| RAM                           | 16 x 8 bits  | Stores instructions and data at addresses `0H` through `FH`.                       |
+| IR (Instruction Register)     | 8 bits       | Holds the fetched byte; upper 4 bits are the opcode, lower 4 bits are the operand. |
+| Accumulator (A)               | 8 bits       | Holds the primary operand and the ALU result.                                      |
+| B Register                    | 8 bits       | Holds the second operand for `ADD` and `SUB`.                                      |
+| Adder/Subtractor              | 8-bit result | Adds or subtracts A and B using 2's complement; `Su` selects subtraction.          |
+| Output Register               | 8 bits       | Receives A during `OUT` and drives the eight output LEDs.                          |
+| Controller-Sequencer          | T1-T6        | Decodes the instruction and generates the control signals for each T-state.        |
 
 ### Instruction set
 
-| Instruction | Opcode | Function                                                                 |
-| ----------- | ------ | ------------------------------------------------------------------------ |
-| `LDA`       | `0000` | Loads the RAM operand into A.                                            |
-| `ADD`       | `0001` | Loads the RAM operand into B and adds A and B into A.                    |
-| `SUB`       | `0010` | Loads the RAM operand into B and subtracts B from A, wrapping to 8 bits. |
-| `OUT`       | `1110` | Copies A to the Output Register.                                         |
-| `HLT`       | `1111` | Stops the clock at T4.                                                   |
+| Instruction | Opcode | Function                                                         |
+| ----------- | ------ | ---------------------------------------------------------------- |
+| `LDA`       | `0000` | Load Accumulator from memory.                                    |
+| `ADD`       | `0001` | Add memory value to Accumulator.                                 |
+| `SUB`       | `0010` | Subtract memory value from Accumulator (result wraps to 8 bits). |
+| `OUT`       | `1110` | Output Accumulator value.                                        |
+| `HLT`       | `1111` | Halt execution.                                                  |
 
 ### T-states and control signals
 
@@ -143,9 +163,13 @@ npm test
 | T5      | Execute | `CE`, `La` for `LDA`; `CE`, `Lb` for `ADD`/`SUB`                       | RAM loads A for `LDA`, or B for `ADD`/`SUB`.                         |
 | T6      | Execute | `Eu`, `La` for `ADD`; `Eu`, `La`, `Su` for `SUB`                       | The ALU returns the result to A and the instruction cycle completes. |
 
-## 6. Sample Programs
+## 7. Sample Programs
 
-### Program 1: 25H + 05H - 23H = 07H
+The values below are entered by the user through the program editor or quick-entry interface. They are not hard-coded.
+
+### Program 1: 25H + 05H - 23H
+
+Quick-entry format:
 
 ```text
 0: LDA 9
@@ -163,43 +187,43 @@ B: 23H
 | `0H`    | `LDA 9H`    | `0000 1001`  |
 | `1H`    | `ADD AH`    | `0001 1010`  |
 | `2H`    | `SUB BH`    | `0010 1011`  |
-| `3H`    | `OUT`       | `1110 0000`  |
-| `4H`    | `HLT`       | `1111 0000`  |
+| `3H`    | `OUT`       | `1110 1111`  |
+| `4H`    | `HLT`       | `1111 1111`  |
 | `9H`    | `DATA 25H`  | `0010 0101`  |
 | `AH`    | `DATA 05H`  | `0000 0101`  |
 | `BH`    | `DATA 23H`  | `0010 0011`  |
 
-Expected output: `07H`.
+**Expected output:** `07H` (`0000 0111`)
 
-### Program 2: Add two numbers
+The lower nibble of `OUT` and `HLT` is not used by the controller.
 
-Inputs: `12H + 08H`. Expected output: `1AH`.
+### Program 2: 12H + 08H
 
 | Address | Instruction | Machine code |
 | ------- | ----------- | ------------ |
 | `0H`    | `LDA 9H`    | `0000 1001`  |
 | `1H`    | `ADD AH`    | `0001 1010`  |
-| `2H`    | `OUT`       | `1110 0000`  |
-| `3H`    | `HLT`       | `1111 0000`  |
+| `2H`    | `OUT`       | `1110 1111`  |
+| `3H`    | `HLT`       | `1111 1111`  |
 | `9H`    | `DATA 12H`  | `0001 0010`  |
 | `AH`    | `DATA 08H`  | `0000 1000`  |
 
-### Program 3: Subtract two numbers
+**Expected output:** `1AH` (`0001 1010`)
 
-Inputs: `20H - 07H`. Expected output: `19H`.
+### Program 3: 20H - 07H
 
 | Address | Instruction | Machine code |
 | ------- | ----------- | ------------ |
 | `0H`    | `LDA 9H`    | `0000 1001`  |
 | `1H`    | `SUB AH`    | `0010 1010`  |
-| `2H`    | `OUT`       | `1110 0000`  |
-| `3H`    | `HLT`       | `1111 0000`  |
+| `2H`    | `OUT`       | `1110 1111`  |
+| `3H`    | `HLT`       | `1111 1111`  |
 | `9H`    | `DATA 20H`  | `0010 0000`  |
 | `AH`    | `DATA 07H`  | `0000 0111`  |
 
-All data values are entered by the user through the program editor or quick-entry interface. The examples correspond to the presets defined in the application.
+**Expected output:** `19H` (`0001 1001`)
 
-## 7. Project Structure
+## 8. Project Structure
 
 ```text
 src/
@@ -214,42 +238,40 @@ src/
 ├── hooks/
 │   └── useSap1.js          # Reducer-backed simulator state and run clock
 └── sap1/
-	├── cpu.js              # CPU state, loading, reset, micro-steps, and instructions
-	├── instructions.js     # Opcodes, control signals, decoding, and formatting
-	├── parser.js           # Quick-entry parsing and validation
-	├── presets.js          # Three editable sample programs
-	├── sap1.test.js        # Vitest tests for CPU and parser behavior
-	└── utils.js             # 4-bit/8-bit masking, binary, hexadecimal, and parsing helpers
+    ├── cpu.js              # CPU state, loading, reset, micro-steps, and instructions
+    ├── instructions.js     # Opcodes, control signals, decoding, and formatting
+    ├── parser.js           # Quick-entry parsing and validation
+    ├── presets.js          # Three editable sample programs
+    ├── sap1.test.js        # Vitest tests for CPU and parser behavior
+    └── utils.js            # 4-bit/8-bit masking, binary, hexadecimal, and parsing helpers
 ```
 
-## 8. Responsive Design Notes
-
-- **Desktop:** A three-column dashboard presents the editor and controls, RAM/W-Bus/output, and registers or the instruction table in a single-screen working layout. The RAM and instruction table provide localized scrolling when needed.
-- **Tablet:** At widths below 1200px, the dashboard becomes two columns and the registers/instruction table move across the full width; the status bar also uses two columns.
-- **Mobile:** At widths below 768px, panels stack vertically, the header actions expand to full width, the control panel becomes a sticky bottom control surface, and the register, LED, and status layouts adapt to the narrow screen.
-
 ## 9. Testing
-
-The Vitest suite tests the sample program result and halt behavior, 8-bit subtraction underflow, 4-bit program-counter wraparound, `OUT` and `HLT` behavior, and malformed quick-entry validation.
-
-Run the tests with:
 
 ```bash
 npm test
 ```
 
+The Vitest suite covers:
+
+- the sample program result and halt behavior
+- 8-bit subtraction underflow
+- 4-bit program-counter wraparound
+- `OUT` and `HLT` behavior
+- malformed quick-entry validation
+
 ## 10. Team Members
 
-| Name     | Role        |
-| -------- | ----------- |
-| Member 1 | Team member |
-| Member 2 | Team member |
-| Member 3 | Team member |
-| Member 4 | Team member |
-| Member 5 | Team member |
+| Name                             | Role                                                |
+| -------------------------------- | --------------------------------------------------- |
+| Cabuhat, Dave Ronald G.          | Documentation and demo video                        |
+| Carreon, Dustin Howell S.        | Project lead and GUI: dashboard, W-Bus, and ALU     |
+| Dela Cruz, Christian Lance C.    | UI/UX Designer, Decoder                             |
+| Panganiban, Nelson DC.           | Testing and QA                                      |
+| Tudlasan, Jhon Marvic Vincent C. | CPU logic: registers, LEDs and controller-sequencer |
 
 ## 11. Acknowledgments
 
 - **Course:** Computer Architecture and Organization
-- **Instructor:** [Instructor Name]
+- **Instructor:** Madelyn Adelaida B. De Guzman
 - **Reference:** Malvino and Brown, _Digital Computer Electronics_

@@ -2,18 +2,34 @@ import { useEffect, useMemo, useState } from "react";
 import "./App.css";
 import { useSap1 } from "./hooks/useSap1";
 import {
-  decode,
-  formatInstruction,
-  INSTRUCTIONS,
+  ADDRESS_BITS,
+  CLOCK_SPEED_STEP,
+  DATA_BITS,
+  FETCH_T_STATE_COUNT,
+  IDLE_T_STATE,
+  MAX_CLOCK_SPEED,
+  MIN_CLOCK_SPEED,
+  NIBBLE_BITS,
+  RAM_SIZE,
   SIGNALS,
-} from "./sap1/instructions";
-import { parseQuickEntry } from "./sap1/parser";
-import { PRESETS } from "./sap1/presets";
-import { groupedBin, toBin, toHex } from "./sap1/utils";
+  T_STATE_COUNT,
+  encodeInstruction,
+} from "./sap1/config";
+import { decode, formatInstruction } from "./sap1/instructions";
+import { evaluateProgram } from "./sap1/evaluator";
+import { groupedBin, parseHex, toBin, toHex } from "./sap1/utils";
 
-const addresses = Array.from({ length: 16 }, (_, index) => index);
-const instructionNames = ["DATA", ...Object.keys(INSTRUCTIONS)];
-
+const addresses = Array.from({ length: RAM_SIZE }, (_, index) => index);
+const SAMPLE_FIELDS = Object.freeze({
+  aData: "25H",
+  bData: "05H",
+  cData: "23H",
+  aAddress: "9",
+  bAddress: "A",
+  cAddress: "B",
+  operation2: "ADD",
+  operation3: "SUB",
+});
 function Button({ children, className = "", ...props }) {
   return (
     <button className={`button ${className}`} type="button" {...props}>
@@ -32,7 +48,7 @@ function Panel({ title, children, className = "", action }) {
     </section>
   );
 }
-function Bits({ value, bits = 8 }) {
+function Bits({ value, bits = DATA_BITS }) {
   return (
     <div className="bits" aria-label={`${toBin(value, bits)} binary value`}>
       {toBin(value, bits)
@@ -48,7 +64,7 @@ function Bits({ value, bits = 8 }) {
     </div>
   );
 }
-function RegisterCard({ label, value, bits = 8, note, changed }) {
+function RegisterCard({ label, value, bits = DATA_BITS, note, changed }) {
   return (
     <article className={`register-card ${changed ? "changed" : ""}`}>
       <div className="register-label">
@@ -93,148 +109,181 @@ function Modal({ title, children, onClose }) {
     </div>
   );
 }
+function deriveProgram(fields) {
+  const errors = [];
+  const dataFields = [
+    ["A DATA", "aData"],
+    ["B DATA", "bData"],
+    ["C DATA", "cData"],
+  ];
+  const addressFields = [
+    ["A ADDRESS", "aAddress"],
+    ["B ADDRESS", "bAddress"],
+    ["C ADDRESS", "cAddress"],
+  ];
+  const data = Object.fromEntries(
+    dataFields.map(([label, key]) => {
+      const value = parseHex(fields[key]);
+      if (value === null || value > 0xff)
+        errors.push(`${label} must be 00 to FF.`);
+      return [key, value];
+    }),
+  );
+  const dataAddresses = Object.fromEntries(
+    addressFields.map(([label, key]) => {
+      const value = parseHex(fields[key]);
+      if (value === null || value > 0xf)
+        errors.push(`${label} must be 0 to F.`);
+      return [key, value];
+    }),
+  );
+  const usedAddresses = addressFields
+    .map(([, key]) => dataAddresses[key])
+    .filter((value) => value !== null);
+  if (usedAddresses.some((value) => value <= 4))
+    errors.push("Data addresses cannot overlap the program area (0 to 4).");
+  if (new Set(usedAddresses).size !== usedAddresses.length)
+    errors.push("Data addresses must not overlap each other.");
+  const instructions = [
+    ["LDA", dataAddresses.aAddress],
+    [fields.operation2, dataAddresses.bAddress],
+    [fields.operation3, dataAddresses.cAddress],
+    ["OUT", null],
+    ["HLT", null],
+  ];
+  const ram = Array(RAM_SIZE).fill(0);
+  const entries = Array(RAM_SIZE).fill(null);
+  instructions.forEach(([mnemonic, operand], address) => {
+    ram[address] = encodeInstruction(mnemonic, operand ?? 0xf);
+    entries[address] = { kind: "instruction", mnemonic, operand };
+  });
+  dataFields.forEach(([, key], index) => {
+    const address = dataAddresses[addressFields[index][1]];
+    if (address !== null && address > 4 && data[key] !== null) {
+      ram[address] = data[key];
+      entries[address] = { kind: "data", value: data[key] };
+    }
+  });
+  const valid = errors.length === 0;
+  const expectedValue = valid
+    ? [fields.operation2, fields.operation3].reduce(
+        (value, operation, index) => {
+          const operand = data[dataFields[index + 1][1]];
+          return operation === "ADD"
+            ? (value + operand) & 0xff
+            : (value - operand + 256) & 0xff;
+        },
+        data.aData,
+      )
+    : null;
+  return { ram, entries, errors, valid, expectedValue };
+}
 
-function ProgramEditor({ state, dispatch }) {
-  const [mode, setMode] = useState("grid");
-  const [quickText, setQuickText] = useState(PRESETS["25H + 05H - 23H = 07H"]);
-  const [errors, setErrors] = useState([]);
-  const [draft, setDraft] = useState(Array(16).fill(0));
-  const update = (address, value) =>
-    setDraft((current) =>
-      current.map((item, index) => (index === address ? value : item)),
-    );
-  const applyQuick = () => {
-    const result = parseQuickEntry(quickText);
-    setErrors(result.errors);
-    if (!result.errors.length) setDraft(result.ram);
-  };
-  const applyPreset = (name) => {
-    const text = PRESETS[name];
-    setQuickText(text);
-    const result = parseQuickEntry(text);
-    setDraft(result.ram);
-    setErrors([]);
-  };
-  const displayInstruction = (address) => {
-    const byte = draft[address];
-    const { mnemonic, operand } = decode(byte);
-    return mnemonic
-      ? { mnemonic, operand }
-      : { mnemonic: "DATA", operand: byte };
+function ProgramEditor({ state, dispatch, program, fields, setFields }) {
+  const updateField = (key, value) =>
+    setFields((current) => ({ ...current, [key]: value.toUpperCase() }));
+  const formula = `A ${fields.operation2 === "ADD" ? "+" : "-"} B ${fields.operation3 === "ADD" ? "+" : "-"} C`;
+  const loadProgram = () =>
+    dispatch({ type: "load", ram: program.ram, entries: program.entries });
+  const loadSample = () => {
+    setFields(SAMPLE_FIELDS);
+    const sample = deriveProgram(SAMPLE_FIELDS);
+    dispatch({ type: "load", ram: sample.ram, entries: sample.entries });
   };
   return (
-    <Panel
-      title="Program Editor"
-      className="editor-panel"
-      action={
-        <div className="segmented">
-          <button
-            className={mode === "grid" ? "selected" : ""}
-            onClick={() => setMode("grid")}
-          >
-            Grid
-          </button>
-          <button
-            className={mode === "quick" ? "selected" : ""}
-            onClick={() => setMode("quick")}
-          >
-            Quick entry
-          </button>
-        </div>
-      }
-    >
-      {mode === "grid" ? (
-        <div className="editor-grid">
-          {addresses.map((address) => {
-            const item = displayInstruction(address);
-            return (
-              <div className="editor-row" key={address}>
-                <span className="address">
-                  {address.toString(16).toUpperCase()}
-                </span>
-                <select
-                  value={item.mnemonic}
-                  aria-label={`Instruction at address ${address.toString(16)}`}
-                  onChange={(event) => {
-                    const mnemonic = event.target.value;
-                    update(
-                      address,
-                      mnemonic === "DATA" ? 0 : INSTRUCTIONS[mnemonic] << 4,
-                    );
-                  }}
-                >
-                  {instructionNames.map((name) => (
-                    <option key={name}>{name}</option>
-                  ))}
-                </select>
-                {item.mnemonic === "DATA" ? (
-                  <input
-                    className="hex-input"
-                    value={toHex(item.operand)}
-                    onChange={(event) => {
-                      const value = Number.parseInt(
-                        event.target.value.replace(/H$/i, ""),
-                        16,
-                      );
-                      if (!Number.isNaN(value) && value >= 0 && value <= 255)
-                        update(address, value);
-                    }}
-                    aria-label={`Data at address ${address.toString(16)}`}
-                  />
+    <Panel title="Program Editor" className="editor-panel">
+      <p className="editor-subtitle">LDA, ADD, SUB, OUT, HLT</p>
+      <p className="formula">
+        Formula: <strong>{formula}</strong>
+      </p>
+      <div className="program-preview" aria-label="Generated program preview">
+        {program.entries.map((entry, address) =>
+          entry ? (
+            <div className="preview-line" key={address}>
+              <span>{address.toString(16).toUpperCase()}:</span>
+              <strong>
+                {entry.kind === "data" ? (
+                  toHex(entry.value)
                 ) : (
-                  <select
-                    value={item.operand}
-                    disabled={["OUT", "HLT"].includes(item.mnemonic)}
-                    aria-label={`Operand at address ${address.toString(16)}`}
-                    onChange={(event) =>
-                      update(
-                        address,
-                        (INSTRUCTIONS[item.mnemonic] << 4) |
-                          Number(event.target.value),
-                      )
-                    }
-                  >
-                    {addresses.map((value) => (
-                      <option key={value} value={value}>
-                        {value.toString(16).toUpperCase()}
-                      </option>
-                    ))}
-                  </select>
+                  <>
+                    {entry.mnemonic}
+                    {entry.operand !== null && (
+                      <>
+                        {" "}
+                        <em>{entry.operand.toString(16).toUpperCase()}</em>
+                      </>
+                    )}
+                  </>
                 )}
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="quick-entry">
-          <textarea
-            value={quickText}
-            onChange={(event) => setQuickText(event.target.value)}
-            aria-label="Quick program entry"
-            spellCheck="false"
-          />
-          {errors.map((error) => (
-            <div className="error" key={error}>
-              {error}
+              </strong>
             </div>
-          ))}
-          <Button onClick={applyQuick}>Parse entries</Button>
+          ) : null,
+        )}
+      </div>
+      <div className="editor-fields">
+        {[
+          ["A", "aData", "aAddress"],
+          ["B", "bData", "bAddress"],
+          ["C", "cData", "cAddress"],
+        ].map(([label, dataKey, addressKey]) => (
+          <div className="field-column" key={label}>
+            <label>
+              {label} DATA
+              <input
+                value={fields[dataKey]}
+                onChange={(event) => updateField(dataKey, event.target.value)}
+                maxLength={3}
+              />
+            </label>
+            <label>
+              {label} ADDRESS
+              <input
+                value={fields[addressKey]}
+                onChange={(event) =>
+                  updateField(addressKey, event.target.value)
+                }
+                maxLength={2}
+              />
+            </label>
+          </div>
+        ))}
+      </div>
+      <div className="operation-fields">
+        <label>
+          OPERATION 2
+          <select
+            value={fields.operation2}
+            onChange={(event) => updateField("operation2", event.target.value)}
+          >
+            <option>ADD</option>
+            <option>SUB</option>
+          </select>
+        </label>
+        <label>
+          OPERATION 3
+          <select
+            value={fields.operation3}
+            onChange={(event) => updateField("operation3", event.target.value)}
+          >
+            <option>ADD</option>
+            <option>SUB</option>
+          </select>
+        </label>
+      </div>
+      {program.errors.map((error) => (
+        <div className="error" key={error}>
+          {error}
         </div>
-      )}
+      ))}
       <div className="editor-actions">
+        <Button onClick={loadSample}>Load sample program</Button>
         <Button
           className="primary"
-          onClick={() => dispatch({ type: "load", ram: draft })}
+          onClick={loadProgram}
+          disabled={!program.valid}
         >
-          Load Program
+          Load program
         </Button>
-        <div className="preset-list">
-          {Object.keys(PRESETS).map((name) => (
-            <button key={name} onClick={() => applyPreset(name)}>
-              {name}
-            </button>
-          ))}
-        </div>
       </div>
       {state.loaded && (
         <p className="success">
@@ -244,38 +293,54 @@ function ProgramEditor({ state, dispatch }) {
     </Panel>
   );
 }
-function Controls({ state, dispatch }) {
+function Controls({ state, dispatch, onExecutionStart, onReset }) {
   return (
     <Panel title="Controls" className="controls-panel">
       <div className="control-row">
         <Button
-          onClick={() => dispatch({ type: "step" })}
+          onClick={() => {
+            onExecutionStart();
+            dispatch({ type: "step" });
+          }}
           disabled={!state.loaded || state.halted}
         >
           Step
         </Button>
         <Button
-          onClick={() => dispatch({ type: "micro" })}
+          onClick={() => {
+            onExecutionStart();
+            dispatch({ type: "micro" });
+          }}
           disabled={!state.loaded || state.halted}
         >
           Micro-step
         </Button>
         <Button
           className="primary"
-          onClick={() => dispatch({ type: state.running ? "pause" : "run" })}
+          onClick={() => {
+            if (!state.running) onExecutionStart();
+            dispatch({ type: state.running ? "pause" : "run" });
+          }}
           disabled={!state.loaded || state.halted}
         >
           {state.running ? "Pause" : "Run"}
         </Button>
-        <Button onClick={() => dispatch({ type: "reset" })}>Reset</Button>
+        <Button
+          onClick={() => {
+            dispatch({ type: "reset" });
+            onReset();
+          }}
+        >
+          Reset
+        </Button>
       </div>
       <label className="speed">
         Clock speed <strong>{state.speed} ms</strong>
         <input
           type="range"
-          min="100"
-          max="1500"
-          step="50"
+          min={MIN_CLOCK_SPEED}
+          max={MAX_CLOCK_SPEED}
+          step={CLOCK_SPEED_STEP}
           value={state.speed}
           onChange={(event) =>
             dispatch({ type: "speed", value: Number(event.target.value) })
@@ -297,7 +362,7 @@ function Controls({ state, dispatch }) {
 }
 function RamViewer({ state }) {
   return (
-    <Panel title="RAM · 16 x 8-bit" className="ram-panel">
+    <Panel title={`RAM · ${RAM_SIZE} x ${DATA_BITS}-bit`} className="ram-panel">
       <div className="ram-grid">
         {addresses.map((address) => (
           <div
@@ -310,9 +375,11 @@ function RamViewer({ state }) {
             </span>
             <strong>{toHex(state.ram[address])}</strong>
             <small>
-              {formatInstruction(state.ram[address]) === "DATA"
-                ? "(data)"
-                : formatInstruction(state.ram[address])}
+              {state.loaded && state.entries[address]
+                ? state.entries[address].kind === "data"
+                  ? "(data)"
+                  : formatInstruction(state.ram[address])
+                : ""}
             </small>
           </div>
         ))}
@@ -335,8 +402,20 @@ function RamViewer({ state }) {
   );
 }
 function BusDiagram({ state }) {
-  const active = state.bus.source || state.bus.destination;
-  const blocks = ["PC", "MAR", "RAM", "IR", "A", "ALU", "B", "OUT"];
+  const blocks = [
+    { id: "PC", label: "PC" },
+    { id: "MAR", label: "MAR" },
+    { id: "RAM", label: "RAM" },
+    { id: "IR", label: "IR" },
+    { id: "A", label: "A" },
+    { id: "ALU", label: "ALU" },
+    { id: "B", label: "B" },
+    { id: "OUT", label: "Output" },
+  ];
+  const blockX = (id) => 10 + blocks.findIndex((block) => block.id === id) * 96;
+  const sourceX = blockX(state.bus.source) + 35;
+  const destinationX = blockX(state.bus.destination) + 35;
+  const animating = state.running && state.bus.source && !state.halted;
   return (
     <Panel title="W-Bus activity" className="bus-panel">
       <div className="bus-wrap">
@@ -349,27 +428,44 @@ function BusDiagram({ state }) {
             y2="80"
           />
           <circle
-            className={state.bus.source ? "bus-dot moving" : "bus-dot"}
-            cx="380"
+            className={animating ? "bus-dot moving" : "bus-dot"}
+            cx={animating ? sourceX : 380}
             cy="80"
             r="5"
-          />
+          >
+            {animating && (
+              <animate
+                key={`${state.cycleCount}-${state.tState}`}
+                attributeName="cx"
+                from={sourceX}
+                to={destinationX}
+                dur={`${Math.max(80, state.speed * 0.75)}ms`}
+                repeatCount="1"
+                fill="freeze"
+              />
+            )}
+          </circle>
           {blocks.map((block, index) => {
             const x = 10 + index * 96;
             return (
               <g
-                className={active === block ? "bus-block active" : "bus-block"}
-                key={block}
+                className={
+                  state.bus.source === block.id ||
+                  state.bus.destination === block.id
+                    ? "bus-block active"
+                    : "bus-block"
+                }
+                key={block.id}
               >
                 <rect x={x} y="45" width="70" height="42" rx="6" />
                 <text x={x + 35} y="70" textAnchor="middle">
-                  {block}
+                  {block.label}
                 </text>
               </g>
             );
           })}
           <text className="bus-value" x="380" y="125" textAnchor="middle">
-            {state.bus.source
+            {animating
               ? `${toHex(state.bus.value)} · ${groupedBin(state.bus.value)}`
               : "idle"}
           </text>
@@ -393,15 +489,15 @@ function OutputLeds({ value }) {
     <Panel title="Output Register" className="output-panel">
       <div className="output-content">
         <div className="leds">
-          {toBin(value)
+          {toBin(value, DATA_BITS)
             .split("")
             .map((bit, index) => (
               <div className="led-item" key={index}>
                 <span
                   className={`led ${bit === "1" ? "lit" : ""}`}
-                  aria-label={`Bit ${7 - index} ${bit === "1" ? "on" : "off"}`}
+                  aria-label={`Bit ${DATA_BITS - 1 - index} ${bit === "1" ? "on" : "off"}`}
                 />
-                <small>{7 - index}</small>
+                <small>{DATA_BITS - 1 - index}</small>
               </div>
             ))}
         </div>
@@ -419,8 +515,18 @@ function Registers({ state }) {
   const instruction = decode(state.ir);
   return (
     <div className="register-grid">
-      <RegisterCard label="PC" value={state.pc} bits={4} changed={changed} />
-      <RegisterCard label="MAR" value={state.mar} bits={4} changed={changed} />
+      <RegisterCard
+        label="PC"
+        value={state.pc}
+        bits={ADDRESS_BITS}
+        changed={changed}
+      />
+      <RegisterCard
+        label="MAR"
+        value={state.mar}
+        bits={ADDRESS_BITS}
+        changed={changed}
+      />
       <article className="register-card ir-card">
         <div className="register-label">
           <strong>IR</strong>
@@ -432,19 +538,45 @@ function Registers({ state }) {
         </div>
         <Bits value={state.ir} />
       </article>
-      <RegisterCard label="A" value={state.a} bits={8} changed={changed} />
-      <RegisterCard label="B" value={state.b} bits={8} changed={changed} />
+      <RegisterCard
+        label="A"
+        value={state.a}
+        bits={DATA_BITS}
+        changed={changed}
+      />
+      <RegisterCard
+        label="B"
+        value={state.b}
+        bits={DATA_BITS}
+        changed={changed}
+      />
       <RegisterCard
         label="ALU"
         value={state.alu.result}
-        bits={8}
+        bits={DATA_BITS}
         note={`Su=${state.alu.su} · ${state.alu.su ? "subtracts" : "adds"}`}
       />
-      <RegisterCard label="OUT" value={state.out} bits={8} changed={changed} />
+      <RegisterCard
+        label="OUT"
+        value={state.out}
+        bits={DATA_BITS}
+        changed={changed}
+      />
     </div>
   );
 }
-function InstructionTable({ state }) {
+function InstructionTable({ state, program }) {
+  const rows = useMemo(
+    () =>
+      addresses.map((address) => ({
+        address,
+        entry: program.entries[address],
+        machineCode: program.entries[address]
+          ? groupedBin(program.ram[address])
+          : "",
+      })),
+    [program],
+  );
   return (
     <div className="table-wrap">
       <table>
@@ -456,7 +588,7 @@ function InstructionTable({ state }) {
           </tr>
         </thead>
         <tbody>
-          {addresses.map((address) => (
+          {rows.map(({ address, entry, machineCode }) => (
             <tr
               className={
                 state.pc === address
@@ -470,8 +602,16 @@ function InstructionTable({ state }) {
               key={address}
             >
               <td>{address.toString(16).toUpperCase()}H</td>
-              <td>{formatInstruction(state.ram[address])}</td>
-              <td className="mono">{groupedBin(state.ram[address])}</td>
+              <td>
+                {entry
+                  ? entry.kind === "data"
+                    ? toHex(entry.value)
+                    : entry.operand === null
+                      ? entry.mnemonic
+                      : `${entry.mnemonic} ${entry.operand.toString(16).toUpperCase()}H`
+                  : ""}
+              </td>
+              <td className="mono">{machineCode}</td>
             </tr>
           ))}
         </tbody>
@@ -480,33 +620,37 @@ function InstructionTable({ state }) {
   );
 }
 function StatusBar({ state }) {
-  const current = formatInstruction(state.ir);
+  const current =
+    state.tState === IDLE_T_STATE
+      ? "Idle"
+      : state.tState <= FETCH_T_STATE_COUNT
+        ? "Fetching instruction"
+        : formatInstruction(state.ir);
   return (
     <footer className="status-bar">
       <div>
         <small>Now executing</small>
-        <strong>{current === "DATA" ? "Waiting for fetch" : current}</strong>
+        <strong>{current}</strong>
         <span>
-          PC {toHex(state.pc, 1)} · <b>T{state.tState || "-"}</b>
+          PC {toHex(state.pc, ADDRESS_BITS / NIBBLE_BITS)} ·{" "}
+          <b>T{state.tState || "-"}</b>
         </span>
       </div>
       <div className="ring">
         <small>Ring counter</small>
         <div>
-          {[1, 2, 3, 4, 5, 6].map((t) => (
-            <span
-              className={
-                state.tState === t
-                  ? "active"
-                  : state.tState > t || (state.tState === 0 && t < 6)
-                    ? "done"
-                    : ""
-              }
-              key={t}
-            >
-              T{t}
-            </span>
-          ))}
+          {Array.from({ length: T_STATE_COUNT }, (_, index) => index + 1).map(
+            (t) => (
+              <span
+                className={
+                  state.tState === t ? "active" : state.tState > t ? "done" : ""
+                }
+                key={t}
+              >
+                T{t}
+              </span>
+            ),
+          )}
         </div>
       </div>
       <div className="explanation" aria-live="polite">
@@ -524,15 +668,16 @@ function StatusBar({ state }) {
 
 function App() {
   const { state, dispatch } = useSap1();
-  const [tab, setTab] = useState("registers");
+  const [activeTab, setActiveTab] = useState("registers");
   const [modal, setModal] = useState(null);
+  const [fields, setFields] = useState(SAMPLE_FIELDS);
+  const program = useMemo(() => deriveProgram(fields), [fields]);
   const expected = useMemo(
     () =>
-      state.loaded &&
-      state.ram[0] === 0x09 &&
-      state.ram[1] === 0x1a &&
-      state.ram[2] === 0x2b,
-    [state.loaded, state.ram],
+      program.valid
+        ? evaluateProgram(program.ram)
+        : { outputSeen: false, out: null },
+    [program],
   );
   return (
     <main className="app-shell">
@@ -549,39 +694,83 @@ function App() {
       </header>
       <div className="dashboard">
         <div className="left-column">
-          <ProgramEditor state={state} dispatch={dispatch} />
-          <Controls state={state} dispatch={dispatch} />
+          <ProgramEditor
+            state={state}
+            dispatch={dispatch}
+            program={program}
+            fields={fields}
+            setFields={setFields}
+          />
+          <Controls
+            state={state}
+            dispatch={dispatch}
+            onExecutionStart={() => {
+              if (state.tState === IDLE_T_STATE && state.cycleCount === 0)
+                setActiveTab("table");
+            }}
+            onReset={() => setActiveTab("registers")}
+          />
         </div>
         <div className="center-column">
           <RamViewer state={state} />
           <BusDiagram state={state} />
           <OutputLeds value={state.out} />
-          {expected && (
-            <div className="expected">
-              <span>Expected / Actual</span>
-              <strong>07H / {toHex(state.out)}</strong>
+          <div className="expected">
+            <div>
+              <span>Expected</span>
+              <strong>
+                {program.expectedValue === null
+                  ? "--"
+                  : `${toHex(program.expectedValue)} (${groupedBin(program.expectedValue)})`}
+              </strong>
             </div>
-          )}
+            <div>
+              <span>Actual</span>
+              <strong>
+                {expected.outputSeen
+                  ? `${toHex(state.out)} (${groupedBin(state.out)})`
+                  : "--"}
+              </strong>
+            </div>
+            <b
+              className={`status-badge ${expected.outputSeen ? (state.out === program.expectedValue ? "match" : "mismatch") : "pending"}`}
+            >
+              {expected.outputSeen
+                ? state.out === program.expectedValue
+                  ? "MATCH"
+                  : "MISMATCH"
+                : "PENDING"}
+            </b>
+          </div>
         </div>
         <div className="right-column">
           <div className="tabs">
             <button
-              className={tab === "registers" ? "selected" : ""}
-              onClick={() => setTab("registers")}
+              className={activeTab === "registers" ? "selected" : ""}
+              onClick={() => setActiveTab("registers")}
             >
               Registers
             </button>
             <button
-              className={tab === "table" ? "selected" : ""}
-              onClick={() => setTab("table")}
+              className={activeTab === "table" ? "selected" : ""}
+              onClick={() => setActiveTab("table")}
             >
               Instruction Table
             </button>
           </div>
-          {tab === "registers" ? (
+          {activeTab === "registers" ? (
             <Registers state={state} />
+          ) : state.running ||
+            state.tState !== 0 ||
+            state.cycleCount > 0 ||
+            state.halted ||
+            state.executed.length > 0 ||
+            state.lastRead !== null ? (
+            <InstructionTable state={state} program={program} />
           ) : (
-            <InstructionTable state={state} />
+            <p className="empty-state">
+              Run a program to see the instruction table.
+            </p>
           )}
         </div>
       </div>

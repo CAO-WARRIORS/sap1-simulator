@@ -6,10 +6,11 @@ import {
   reset,
   step,
 } from "../sap1/cpu.js";
+import { DEFAULT_CLOCK_SPEED, MAX_CYCLES } from "../sap1/config.js";
 function reducer(state, action) {
   switch (action.type) {
     case "load":
-      return loadProgram(state, action.ram);
+      return loadProgram(state, action.ram, action.entries);
     case "micro":
       return microStep(state);
     case "step":
@@ -23,7 +24,7 @@ function reducer(state, action) {
     case "pause":
       return { ...state, running: false, status: "Paused." };
     case "speed":
-      return { ...state, speed: action.value };
+      return { ...state, speed: action.value || DEFAULT_CLOCK_SPEED };
     default:
       return state;
   }
@@ -34,12 +35,13 @@ export function useSap1() {
     if (!state.running || state.halted) return undefined;
     const timer = setInterval(
       () => dispatch({ type: "micro" }),
-      state.speed || 700,
+      state.speed || DEFAULT_CLOCK_SPEED,
     );
     return () => clearInterval(timer);
   }, [state.running, state.halted, state.speed, state.cycleCount]);
   useEffect(() => {
-    if (state.cycleCount >= 500 && state.running) dispatch({ type: "pause" });
+    if (state.cycleCount >= MAX_CYCLES && state.running)
+      dispatch({ type: "pause" });
   }, [state.cycleCount, state.running]);
   return { state, dispatch };
 }
