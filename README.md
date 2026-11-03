@@ -6,8 +6,6 @@ A web-based simulator of the SAP-1 (Simple-As-Possible 1) computer. It visualize
 
 <!-- Add a project screenshot at ./docs/screenshot.png. -->
 
-**Demo video:** [Watch the demonstration](palagay url)
-
 ## Table of Contents
 
 - [1. Language and Web Framework](#1-language-and-web-framework)
@@ -30,7 +28,7 @@ A web-based simulator of the SAP-1 (Simple-As-Possible 1) computer. It visualize
 ### Justification
 
 - **Component-based UI:** Each part of the SAP-1 block diagram (PC, MAR, IR, Accumulator, B Register, Output Register, RAM viewer, output LEDs, controls) is its own React component. The code therefore mirrors the architecture diagram.
-- **Reactive state:** The simulator state is held in a reducer. Every micro-step updates the CPU state, and React re-renders the registers, RAM highlights, W-Bus and LEDs automatically, so the display is always in sync with the logic.
+- **Reactive state:** The simulator state is held in a single reducer (single source of truth). Every micro-step updates the CPU state, and React re-renders the registers, RAM highlights, Instruction Table, W-Bus and LEDs automatically, so the display is always in sync with the logic.
 - **Fast tooling:** Vite provides a quick development server and a production build.
 - **Browser-only:** The simulator runs entirely in the browser with no backend, and uses real graphical components (buttons, panels, LEDs), not a terminal interface.
 
@@ -101,30 +99,37 @@ The demo shows the simulator computing three different formulas, with the values
 
 ## 4. Features
 
-- 16 x 8-bit RAM viewer with current-address, read and executed-address highlights.
+- **Form-based Program Editor** with A, B and C data fields, A, B and C address fields, and two operation dropdowns (`ADD` or `SUB`). The formula (for example `A + B - C`) and the generated program preview update live as the user edits any field.
+- **Input validation:** addresses must be `0H` to `FH`, must not overlap each other or the program area, and data must be `00H` to `FFH`. Invalid input shows an inline error and disables **Load program**.
+- **Adaptive values:** nothing on screen is hard-coded. The Expected value, Instruction Table, RAM captions, "Now executing" text and Output Register are all derived from the loaded program and the live CPU state.
+- **Expected / Actual check** with a status badge: `PENDING` (not run yet), `MATCH` or `MISMATCH`. Expected is computed from the entered data and operations (8-bit, wraps at `00H` to `FFH`) and shown in hex and binary.
+- **Instruction Table** (address, decoded instruction, 8-bit machine code):
+  - It stays hidden until the program is started, then appears automatically when **Step**, **Micro-step** or **Run** is pressed. The user can switch back to the **Registers** tab at any time, and **Reset** returns to it.
+  - It updates live when the editor values change. Unused rows are left blank.
+  - `OUT` and `HLT` use `1111` as the lower 4 bits (`1110 1111` and `1111 1111`).
+- 16 x 8-bit RAM viewer with current-address, read and executed-address highlights. Unused cells stay blank.
 - Separate panels for PC, MAR, IR (split into opcode and operand), Accumulator, B Register, ALU and Output Register, with values in binary and hexadecimal.
-- Animated W-Bus diagram showing source, destination, value and active control signals.
+- **W-Bus activity** driven by the current micro-operation: one transfer, in one direction (source to destination), once per T-state, with the active control signal chips highlighted only during the T-state that uses them. No looping animation, and it shows `idle` when stopped or halted. Animation timing follows the clock speed.
 - Eight output LEDs showing the Output Register in binary.
-- Ring counter display for T1 through T6.
-- Instruction Table showing address, decoded instruction and binary machine code.
-- Controls: `Load Program`, `Step`, `Micro-step`, `Run`, `Pause`, `Reset` and `Clear RAM`.
+- Ring counter display for T1 through T6. Every instruction cycles through all six T-states, including T6 as a NOP when the instruction has nothing to do in it.
+- Controls: `Load program`, `Load sample program`, `Step`, `Micro-step`, `Run`, `Pause`, `Reset` and `Clear RAM`.
 - Clock speed slider from 100 ms to 1500 ms.
-- Instructions and hexadecimal data are entered by the user through the quick-entry parser. No program values are hard-coded.
-- Responsive layout for desktop (three columns), tablet (below 1200px, two columns) and mobile (below 768px, stacked panels with a sticky control bar).
+- Responsive layout for desktop (three columns, single screen), tablet (below 1200px, two columns) and mobile (below 768px, stacked panels with a sticky control bar).
 
 ## 5. How to Use
 
-1. In **Program Editor**, enter instructions and hexadecimal data values in Quick entry, using lines such as `0: LDA 9` and `9: 25H`.
-2. Click **Parse entries**, or choose one of the presets.
-3. Click **Load Program** to copy the editor values into RAM.
+1. In **Program Editor**, enter the **A, B and C data** values (hex, with or without `H`) and the **A, B and C addresses** (`0` to `F`), then choose **Operation 2** and **Operation 3** (`ADD` or `SUB`). The formula and program preview update as you type.
+2. Optionally click **Load sample program** to fill in the sample values.
+3. Click **Load program** to copy the generated program into RAM.
 4. Run the program:
    - **Micro-step** advances one T-state.
    - **Step** completes one instruction.
    - **Run** advances automatically until `HLT`, and changes to **Pause** while running.
+   - The first time you press any of these, the right panel switches to the **Instruction Table**. Click **Registers** to switch back.
 5. Adjust the **Clock speed** slider to change the automatic run speed.
-6. Watch the W-Bus, control signals, RAM highlights, registers, instruction table and T1-T6 ring counter update.
-7. Read the result in the **Output Register** and its eight LEDs.
-8. Click **Reset** to clear the registers while keeping the loaded program. Click **Clear RAM** to remove the program.
+6. Watch the W-Bus, control signals, RAM highlights, registers, Instruction Table and T1-T6 ring counter update.
+7. Read the result in the **Output Register** and its eight LEDs, and compare **Expected** with **Actual**.
+8. Click **Reset** to clear the registers while keeping the loaded program. Click **Clear RAM** to remove the program. To change values, edit the fields and load the program again.
 
 ## 6. SAP-1 Architecture
 
@@ -152,7 +157,11 @@ The demo shows the simulator computing three different formulas, with the values
 | `OUT`       | `1110` | Output Accumulator value.                                        |
 | `HLT`       | `1111` | Halt execution.                                                  |
 
+The controller decodes only the upper 4 bits (opcode). For `OUT` and `HLT` the lower 4 bits are unused and are written as `1111`.
+
 ### T-states and control signals
+
+Every instruction cycles through all six T-states (T1 to T6), then the ring counter returns to T1.
 
 | T-state | Phase   | Control signals                                                        | Operation                                                            |
 | ------- | ------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -160,16 +169,25 @@ The demo shows the simulator computing three different formulas, with the values
 | T2      | Fetch   | `Cp`                                                                   | PC advances to the next 4-bit address.                               |
 | T3      | Fetch   | `CE`, `Li`                                                             | RAM places the selected byte on the W-Bus and IR loads it.           |
 | T4      | Execute | `Ei`, `Lm` for `LDA`/`ADD`/`SUB`; `Ea`, `Lo` for `OUT`; none for `HLT` | The operand loads MAR, A loads OUT, or HLT stops the clock.          |
-| T5      | Execute | `CE`, `La` for `LDA`; `CE`, `Lb` for `ADD`/`SUB`                       | RAM loads A for `LDA`, or B for `ADD`/`SUB`.                         |
-| T6      | Execute | `Eu`, `La` for `ADD`; `Eu`, `La`, `Su` for `SUB`                       | The ALU returns the result to A and the instruction cycle completes. |
+| T5      | Execute | `CE`, `La` for `LDA`; `CE`, `Lb` for `ADD`/`SUB`; NOP for `OUT`        | RAM loads A for `LDA`, or B for `ADD`/`SUB`.                         |
+| T6      | Execute | `Eu`, `La` for `ADD`; `Eu`, `La`, `Su` for `SUB`; NOP for `LDA`/`OUT`  | The ALU returns the result to A and the instruction cycle completes. |
 
 ## 7. Sample Programs
 
-The values below are entered by the user through the program editor or quick-entry interface. They are not hard-coded.
+The values below are entered by the user through the Program Editor. They are not hard-coded. Each program uses the form `LDA A`, then Operation 2 with B, then Operation 3 with C, then `OUT` and `HLT`.
 
 ### Program 1: 25H + 05H - 23H
 
-Quick-entry format:
+Editor values:
+
+| Field            | Value         |
+| ---------------- | ------------- |
+| A data / address | `25H` / `9`   |
+| B data / address | `05H` / `A`   |
+| C data / address | `23H` / `B`   |
+| Operation 2 / 3  | `ADD` / `SUB` |
+
+Generated program:
 
 ```text
 0: LDA 9
@@ -195,31 +213,15 @@ B: 23H
 
 **Expected output:** `07H` (`0000 0111`)
 
-The lower nibble of `OUT` and `HLT` is not used by the controller.
-
 ### Program 2: 12H + 08H
 
-| Address | Instruction | Machine code |
-| ------- | ----------- | ------------ |
-| `0H`    | `LDA 9H`    | `0000 1001`  |
-| `1H`    | `ADD AH`    | `0001 1010`  |
-| `2H`    | `OUT`       | `1110 1111`  |
-| `3H`    | `HLT`       | `1111 1111`  |
-| `9H`    | `DATA 12H`  | `0001 0010`  |
-| `AH`    | `DATA 08H`  | `0000 1000`  |
+Set A = `12H`, B = `08H`, C = `00H`, with Operation 2 = `ADD` and Operation 3 = `ADD` (adding `00H` does not change the result).
 
 **Expected output:** `1AH` (`0001 1010`)
 
 ### Program 3: 20H - 07H
 
-| Address | Instruction | Machine code |
-| ------- | ----------- | ------------ |
-| `0H`    | `LDA 9H`    | `0000 1001`  |
-| `1H`    | `SUB AH`    | `0010 1010`  |
-| `2H`    | `OUT`       | `1110 1111`  |
-| `3H`    | `HLT`       | `1111 1111`  |
-| `9H`    | `DATA 20H`  | `0010 0000`  |
-| `AH`    | `DATA 07H`  | `0000 0111`  |
+Set A = `20H`, B = `07H`, C = `00H`, with Operation 2 = `SUB` and Operation 3 = `ADD` (adding `00H` does not change the result).
 
 **Expected output:** `19H` (`0001 1001`)
 
@@ -240,8 +242,8 @@ src/
 └── sap1/
     ├── cpu.js              # CPU state, loading, reset, micro-steps, and instructions
     ├── instructions.js     # Opcodes, control signals, decoding, and formatting
-    ├── parser.js           # Quick-entry parsing and validation
-    ├── presets.js          # Three editable sample programs
+    ├── parser.js           # Program Editor input parsing and validation
+    ├── presets.js          # Sample program values for the editor
     ├── sap1.test.js        # Vitest tests for CPU and parser behavior
     └── utils.js            # 4-bit/8-bit masking, binary, hexadecimal, and parsing helpers
 ```
@@ -258,7 +260,7 @@ The Vitest suite covers:
 - 8-bit subtraction underflow
 - 4-bit program-counter wraparound
 - `OUT` and `HLT` behavior
-- malformed quick-entry validation
+- malformed editor input validation
 
 ## 10. Team Members
 
