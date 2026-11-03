@@ -266,9 +266,9 @@ The Vitest suite covers:
 | -------------------------------- | --------------------------------------------------- |
 | Cabuhat, Dave Ronald G.          | Documentation and demo video                        |
 | Carreon, Dustin Howell S.        | Project lead and GUI: dashboard, W-Bus, and ALU     |
-| Dela Cruz, Christian Lance C.    | UI/UX Designer, Decoder                             |
+| Dela Cruz, Christian Lance C.    | CPU logic: registers, LEDs and controller-sequencer |
 | Panganiban, Nelson DC.           | Testing and QA                                      |
-| Tudlasan, Jhon Marvic Vincent C. | CPU logic: registers, LEDs and controller-sequencer |
+| Tudlasan, Jhon Marvic Vincent C. | UI/UX Designer, Decoder                             |
 
 ## 11. Acknowledgments
 
