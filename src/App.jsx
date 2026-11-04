@@ -87,14 +87,7 @@ function Button({ children, className = "", ...props }) {
   );
 }
 
-function Panel({
-  title,
-  children,
-  className = "",
-  action,
-  tourTarget,
-  tour,
-}) {
+function Panel({ title, children, className = "", action, tourTarget, tour }) {
   return (
     <section
       className={`panel ${className} ${tour ? "tutorial-highlight" : ""}`}
@@ -341,7 +334,7 @@ function deriveProgram(fields) {
       if (value === null || value > 0xff)
         errors.push(`${label} must be 00 to FF.`);
       return [key, value];
-    })
+    }),
   );
 
   const dataAddresses = Object.fromEntries(
@@ -350,7 +343,7 @@ function deriveProgram(fields) {
       if (value === null || value > 0xf)
         errors.push(`${label} must be 0 to F.`);
       return [key, value];
-    })
+    }),
   );
 
   const usedAddresses = addressFields
@@ -395,21 +388,14 @@ function deriveProgram(fields) {
             ? (value + operand) & 0xff
             : (value - operand + 256) & 0xff;
         },
-        data.aData
+        data.aData,
       )
     : null;
 
   return { ram, entries, errors, valid, expectedValue };
 }
 
-function ProgramEditor({
-  state,
-  dispatch,
-  program,
-  fields,
-  setFields,
-  tour,
-}) {
+function ProgramEditor({ state, dispatch, program, fields, setFields, tour }) {
   const updateField = (key, value) =>
     setFields((current) => ({ ...current, [key]: value.toUpperCase() }));
 
@@ -449,14 +435,16 @@ function ProgramEditor({
                     {entry.operand !== null && (
                       <>
                         {" "}
-                        <em className="operand">{entry.operand.toString(16).toUpperCase()}H</em>
+                        <em className="operand">
+                          {entry.operand.toString(16).toUpperCase()}H
+                        </em>
                       </>
                     )}
                   </>
                 )}
               </strong>
             </div>
-          ) : null
+          ) : null,
         )}
       </div>
       <div className="editor-fields">
@@ -479,7 +467,9 @@ function ProgramEditor({
               {label} ADDRESS
               <input
                 value={fields[addressKey]}
-                onChange={(event) => updateField(addressKey, event.target.value)}
+                onChange={(event) =>
+                  updateField(addressKey, event.target.value)
+                }
                 maxLength={2}
                 placeholder="9"
               />
@@ -602,10 +592,18 @@ function Transport({
       aria-label="Simulation controls"
     >
       <div className="transport-buttons">
-        <Button onClick={step} disabled={!canAdvance} title="Run one full instruction (S)">
+        <Button
+          onClick={step}
+          disabled={!canAdvance}
+          title="Run one full instruction (S)"
+        >
           Step <kbd>S</kbd>
         </Button>
-        <Button onClick={micro} disabled={!canAdvance} title="Advance one T-state (M)">
+        <Button
+          onClick={micro}
+          disabled={!canAdvance}
+          title="Advance one T-state (M)"
+        >
           Micro-step <kbd>M</kbd>
         </Button>
         <Button
@@ -675,7 +673,9 @@ function RamViewer({ state, tour }) {
             <small>
               {state.loaded && state.entries[address]
                 ? state.entries[address].kind === "data"
-                  ? "(data)"
+                  ? state.lastRead === address
+                    ? "Read"
+                    : "Data"
                   : formatInstruction(state.ram[address])
                 : ""}
             </small>
@@ -689,7 +689,7 @@ function RamViewer({ state, tour }) {
         </span>
         <span>
           <i className="dot amber" />
-          Reading
+          Read
         </span>
         <span>
           <i className="dot green" />
@@ -716,6 +716,7 @@ function BusDiagram({ state, tour }) {
   const sourceX = blockX(state.bus.source) + 35;
   const destinationX = blockX(state.bus.destination) + 35;
   const animating = state.running && state.bus.source && !state.halted;
+  const busBits = state.bus.destination === "MAR" ? NIBBLE_BITS : DATA_BITS;
 
   return (
     <Panel
@@ -785,7 +786,7 @@ function BusDiagram({ state, tour }) {
           })}
           <text className="bus-value" x="380" y="125" textAnchor="middle">
             {animating || state.bus.source
-              ? `${toHex(state.bus.value)} · ${groupedBin(state.bus.value)}`
+              ? `${toHex(state.bus.value, busBits / NIBBLE_BITS)} · ${groupedBin(state.bus.value, busBits)}`
               : "idle"}
           </text>
         </svg>
@@ -903,7 +904,7 @@ function InstructionTable({ state, program }) {
           ? groupedBin(program.ram[address])
           : "",
       })),
-    [program]
+    [program],
   );
 
   return (
@@ -920,14 +921,16 @@ function InstructionTable({ state, program }) {
         <tbody>
           {rows.map(({ address, entry, machineCode }) => {
             const status =
-              state.pc === address
-                ? "Current"
-                : state.lastRead === address
+              entry?.kind === "data"
+                ? state.lastRead === address
                   ? "Read"
-                  : state.executed.includes(address)
-                    ? "Executed"
-                    : entry?.kind === "data"
-                      ? "Data"
+                  : "Data"
+                : state.pc === address
+                  ? "Current"
+                  : state.lastRead === address
+                    ? "Read"
+                    : state.executed.includes(address)
+                      ? "Executed"
                       : entry
                         ? "Ready"
                         : "Unused";
@@ -1001,7 +1004,7 @@ function StatusBar({ state, tour }) {
         <strong>{current}</strong>
         <span>
           PC {toHex(state.pc, ADDRESS_BITS / NIBBLE_BITS)} ·{" "}
-          <b>T{state.tState || "-"}</b>
+          <b>T{state.tState || 1}</b>
         </span>
       </div>
       <div className="ring">
@@ -1017,7 +1020,7 @@ function StatusBar({ state, tour }) {
               >
                 T{t}
               </span>
-            )
+            ),
           )}
         </div>
       </div>
@@ -1079,7 +1082,7 @@ function App() {
       program.valid
         ? evaluateProgram(program.ram)
         : { outputSeen: false, out: null },
-    [program]
+    [program],
   );
 
   return (
@@ -1183,13 +1186,13 @@ function App() {
                 </strong>
               </div>
               <b
-                className={`status-badge ${expected.outputSeen ? (state.out === program.expectedValue ? "match" : "mismatch") : "pending"}`}
+                className={`status-badge ${state.halted ? (state.out === program.expectedValue ? "match" : "mismatch") : "pending"}`}
               >
-                {expected.outputSeen
+                {state.halted
                   ? state.out === program.expectedValue
                     ? "MATCH"
                     : "MISMATCH"
-                  : "PENDING"}
+                  : "NOT RUN YET"}
               </b>
             </div>
           </div>
@@ -1240,17 +1243,14 @@ function App() {
       </div>
       <StatusBar state={state} tour={getTutorial("status")} />
       {modal && (
-        <Modal
-          title="How SAP-1 Works"
-          onClose={() => setModal(null)}
-        >
+        <Modal title="How SAP-1 Works" onClose={() => setModal(null)}>
           <div className="modal-copy">
             <p className="guide-intro">
               SAP-1 (Simple-As-Possible 1) is a small 8-bit teaching computer.
               It demonstrates how a processor fetches an instruction from
-              memory, decodes it, and executes it using registers, an
-              arithmetic logic unit (ALU), and a shared W-Bus. This simulator
-              has 16 RAM addresses (0H-FH); each address stores one byte.
+              memory, decodes it, and executes it using registers, an arithmetic
+              logic unit (ALU), and a shared W-Bus. This simulator has 16 RAM
+              addresses (0H-FH); each address stores one byte.
             </p>
             <h3 className="guide-section-title">What the parts do</h3>
             <div className="modal-table-wrap">
@@ -1272,7 +1272,10 @@ function App() {
                   </tr>
                   <tr>
                     <td>IR · Instruction Register</td>
-                    <td>Holds the fetched instruction: a 4-bit opcode and 4-bit operand.</td>
+                    <td>
+                      Holds the fetched instruction: a 4-bit opcode and 4-bit
+                      operand.
+                    </td>
                   </tr>
                   <tr>
                     <td>A · Accumulator</td>
@@ -1284,15 +1287,24 @@ function App() {
                   </tr>
                   <tr>
                     <td>ALU</td>
-                    <td>Adds A and B or subtracts B from A, keeping the result to 8 bits.</td>
+                    <td>
+                      Adds A and B or subtracts B from A, keeping the result to
+                      8 bits.
+                    </td>
                   </tr>
                   <tr>
                     <td>OUT · Output Register</td>
-                    <td>Holds the value copied from A by the OUT instruction and drives the LEDs.</td>
+                    <td>
+                      Holds the value copied from A by the OUT instruction and
+                      drives the LEDs.
+                    </td>
                   </tr>
                   <tr>
                     <td>W-Bus · Control signals</td>
-                    <td>The shared data path transfers values; signal chips show which registers read or write during each T-state.</td>
+                    <td>
+                      The shared data path transfers values; signal chips show
+                      which registers read or write during each T-state.
+                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -1336,8 +1348,8 @@ function App() {
             <p>
               Click <strong>Load sample</strong> in Program Editor. It loads{" "}
               <span className="mono">25H + 05H - 23H</span>. The program
-              instructions occupy addresses 0H-4H; the data is stored at 9H,
-              AH, and BH. “H” means the number is hexadecimal.
+              instructions occupy addresses 0H-4H; the data is stored at 9H, AH,
+              and BH. “H” means the number is hexadecimal.
             </p>
             <div className="modal-table-wrap">
               <table className="guide-table">
@@ -1404,24 +1416,24 @@ function App() {
             <p>
               The calculation is <span className="mono">25H + 05H = 2AH</span>,
               then <span className="mono">2AH - 23H = 07H</span>. OUT displays{" "}
-              <strong>07H</strong> (binary <span className="mono">0000 0111</span>),
-              and the Expected / Actual check should show MATCH.
+              <strong>07H</strong> (binary{" "}
+              <span className="mono">0000 0111</span>), and the Expected /
+              Actual check should show MATCH.
             </p>
             <h3 className="guide-section-title">How execution is shown</h3>
             <p>
-              Each instruction takes six T-states in this simulator. T1-T3
-              fetch it: PC sends its address to MAR, PC advances, then RAM
-              loads the instruction into IR. T4-T6 execute it: LDA, ADD, and
-              SUB use their operand address; OUT copies A to output; HLT stops
-              at T4. Unused T-states are shown as NOPs. Use{" "}
-              <strong>Micro-step</strong> for one T-state, <strong>Step</strong>{" "}
-              for one full instruction, or <strong>Run</strong> to continue
-              until HLT. Reset keeps the loaded program so you can replay it.
+              Each instruction takes six T-states in this simulator. T1-T3 fetch
+              it: PC sends its address to MAR, PC advances, then RAM loads the
+              instruction into IR. T4-T6 execute it: LDA, ADD, and SUB use their
+              operand address; OUT copies A to output; HLT stops at T4. Unused
+              T-states are shown as NOPs. Use <strong>Micro-step</strong> for
+              one T-state, <strong>Step</strong> for one full instruction, or{" "}
+              <strong>Run</strong> to continue until HLT. Reset keeps the loaded
+              program so you can replay it.
             </p>
             <p>
-              Shortcuts: <strong>S</strong> step, <strong>M</strong>{" "}
-              micro-step, <strong>P</strong> run / pause, <strong>R</strong>{" "}
-              reset.
+              Shortcuts: <strong>S</strong> step, <strong>M</strong> micro-step,{" "}
+              <strong>P</strong> run / pause, <strong>R</strong> reset.
             </p>
           </div>
         </Modal>
