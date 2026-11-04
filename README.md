@@ -85,7 +85,7 @@ npm run preview
 
 ## 3. Demonstration
 
-**Recorded demo:** [add link to video]
+**Recorded demo:** [https://drive.google.com/file/d/1TTvvuxNoxbf-xplovyU0lmzbBWFJKG9u/view?usp=sharing]
 
 The demo shows the simulator computing three different formulas, with the values typed in by the user and each result shown on the 8-LED output display:
 
