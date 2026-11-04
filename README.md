@@ -2,9 +2,7 @@
 
 A web-based simulator of the SAP-1 (Simple-As-Possible 1) computer. It visualizes the registers, W-Bus, RAM, control signals and output LEDs in the browser while running SAP-1 machine language programs through the fetch-decode-execute cycle. It was built for Computer Architecture and Organization.
 
-![SAP-1 Simulator](./docs/screenshot.png)
-
-<!-- Add a project screenshot at ./docs/screenshot.png. -->
+![SAP-1 Simulator](./public/images/sap1_browser.png)
 
 ## Table of Contents
 
@@ -102,16 +100,16 @@ The demo shows the simulator computing three different formulas, with the values
 - **Form-based Program Editor** with A, B and C data fields, A, B and C address fields, and two operation dropdowns (`ADD` or `SUB`). The formula (for example `A + B - C`) and the generated program preview update live as the user edits any field.
 - **Input validation:** addresses must be `0H` to `FH`, must not overlap each other or the program area, and data must be `00H` to `FFH`. Invalid input shows an inline error and disables **Load program**.
 - **Adaptive values:** nothing on screen is hard-coded. The Expected value, Instruction Table, RAM captions, "Now executing" text and Output Register are all derived from the loaded program and the live CPU state.
-- **Expected / Actual check** with a status badge: `PENDING` (not run yet), `MATCH` or `MISMATCH`. Expected is computed from the entered data and operations (8-bit, wraps at `00H` to `FFH`) and shown in hex and binary.
+- **Expected / Actual check** with a status badge: `PENDING` (shown from loading until the program halts, so a program that has not run is never reported as wrong), then `MATCH` or `MISMATCH` once `HLT` is reached. Expected is computed from the entered data and operations (8-bit, wraps at `00H` to `FFH`) and shown in hex and binary.
 - **Instruction Table** (address, decoded instruction, 8-bit machine code):
   - It stays hidden until the program is started, then appears automatically when **Step**, **Micro-step** or **Run** is pressed. The user can switch back to the **Registers** tab at any time, and **Reset** returns to it.
   - It updates live when the editor values change. Unused rows are left blank.
   - `OUT` and `HLT` use `1111` as the lower 4 bits (`1110 1111` and `1111 1111`).
-- 16 x 8-bit RAM viewer with current-address, read and executed-address highlights. Unused cells stay blank.
+- 16 x 8-bit RAM viewer with current-address, read and executed-address highlights. Unused cells stay blank. Instruction cells are marked **Executed** once they have run, while data cells are only marked **Data** (or **Read** while the CPU is reading them), because data is read and never executed.
 - Separate panels for PC, MAR, IR (split into opcode and operand), Accumulator, B Register, ALU and Output Register, with values in binary and hexadecimal.
-- **W-Bus activity** driven by the current micro-operation: one transfer, in one direction (source to destination), once per T-state, with the active control signal chips highlighted only during the T-state that uses them. No looping animation, and it shows `idle` when stopped or halted. Animation timing follows the clock speed.
+- **W-Bus activity** driven by the current micro-operation: one transfer, in one direction (source to destination), once per T-state, with the active control signal chips highlighted only during the T-state that uses them. No looping animation, and it shows `idle` when stopped or halted. Animation timing follows the clock speed. The bus is 8 bits wide, so 4-bit addresses and operands appear on it with the upper 4 bits as zeros (for example `8H` is shown as `08H`).
 - Eight output LEDs showing the Output Register in binary.
-- Ring counter display for T1 through T6. Every instruction cycles through all six T-states, including T6 as a NOP when the instruction has nothing to do in it.
+- Ring counter display for T1 through T6. `LDA`, `ADD`, `SUB` and `OUT` cycle through all six T-states, including T6 as a NOP when the instruction has nothing to do in it. `HLT` stops the clock at T4, so the ring counter stays on T4 after the program finishes. After **Reset** the ring counter shows T1 as ready.
 - Controls: `Load program`, `Load sample program`, `Step`, `Micro-step`, `Run`, `Pause`, `Reset` and `Clear RAM`.
 - Clock speed slider from 100 ms to 1500 ms.
 - Responsive layout for desktop (three columns, single screen), tablet (below 1200px, two columns) and mobile (below 768px, stacked panels with a sticky control bar).
@@ -123,13 +121,13 @@ The demo shows the simulator computing three different formulas, with the values
 3. Click **Load program** to copy the generated program into RAM.
 4. Run the program:
    - **Micro-step** advances one T-state.
-   - **Step** completes one instruction.
-   - **Run** advances automatically until `HLT`, and changes to **Pause** while running.
+   - **Step** completes one instruction. For `LDA`, `ADD`, `SUB` and `OUT` it ends at T6, and for `HLT` it ends at T4.
+   - **Run** advances automatically until `HLT`, and changes to **Pause** while running. When `HLT` is reached the clock stops at T4 and the status shows **Halted**. **Step** and **Run** do nothing after that until **Reset** is pressed.
    - The first time you press any of these, the right panel switches to the **Instruction Table**. Click **Registers** to switch back.
 5. Adjust the **Clock speed** slider to change the automatic run speed.
 6. Watch the W-Bus, control signals, RAM highlights, registers, Instruction Table and T1-T6 ring counter update.
-7. Read the result in the **Output Register** and its eight LEDs, and compare **Expected** with **Actual**.
-8. Click **Reset** to clear the registers while keeping the loaded program. Click **Clear RAM** to remove the program. To change values, edit the fields and load the program again.
+7. Read the result in the **Output Register** and its eight LEDs, and compare **Expected** with **Actual**. The badge changes from `PENDING` to `MATCH` (or `MISMATCH`) when the program halts.
+8. Click **Reset** to clear the registers while keeping the loaded program. The ring counter returns to T1 (ready) and the bus, registers and LEDs are cleared, even if Reset is pressed in the middle of an instruction. Click **Clear RAM** to remove the program. To change values, edit the fields and load the program again.
 
 ## 6. SAP-1 Architecture
 
@@ -161,7 +159,7 @@ The controller decodes only the upper 4 bits (opcode). For `OUT` and `HLT` the l
 
 ### T-states and control signals
 
-Every instruction cycles through all six T-states (T1 to T6), then the ring counter returns to T1.
+`LDA`, `ADD`, `SUB` and `OUT` cycle through all six T-states (T1 to T6), then the ring counter returns to T1. `HLT` runs T1 to T3 (fetch) and stops the clock at T4, so T5 and T6 never occur and the ring counter stays on T4.
 
 | T-state | Phase   | Control signals                                                        | Operation                                                            |
 | ------- | ------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -213,6 +211,20 @@ B: 23H
 
 **Expected output:** `07H` (`0000 0111`)
 
+**Expected state after Run:** ring counter on T4, PC = `5H`, IR = `FFH`, A = `07H`, Output Register = `07H` (LEDs `00000111`), status **Halted**, badge `MATCH`.
+
+The W-Bus values for each T-state of this program:
+
+| Instruction | T1   | T3    | T4          | T5    | T6    |
+| ----------- | ---- | ----- | ----------- | ----- | ----- |
+| `LDA 9H`    | `0H` | `09H` | `9H` (MAR)  | `25H` | idle  |
+| `ADD AH`    | `1H` | `1AH` | `AH` (MAR)  | `05H` | `2AH` |
+| `SUB BH`    | `2H` | `2BH` | `BH` (MAR)  | `23H` | `07H` |
+| `OUT`       | `3H` | `EFH` | `07H` (OUT) | idle  | idle  |
+| `HLT`       | `4H` | `FFH` | halt        | -     | -     |
+
+T2 is the PC increment (`Cp`) and uses no bus transfer. Addresses and operands use the lower 4 bits of the 8-bit bus.
+
 ### Program 2: 12H + 08H
 
 Set A = `12H`, B = `08H`, C = `00H`, with Operation 2 = `ADD` and Operation 3 = `ADD` (adding `00H` does not change the result).
@@ -261,6 +273,20 @@ The Vitest suite covers:
 - 4-bit program-counter wraparound
 - `OUT` and `HLT` behavior
 - malformed editor input validation
+
+### Manual verification checklist
+
+Run these in the browser after any change to the CPU or display code:
+
+1. Load the sample program and press **Run**. The ring counter must stop on **T4**, with PC = `5H`, IR = `FFH`, A = `07H`, Output = `07H`, status **Halted**, and badge `MATCH`.
+2. Press **Step** and **Run** again after the halt. Nothing should change.
+3. Press **Reset**. The ring counter shows T1 as ready, and the bus, registers and LEDs clear. Repeat the Reset in the middle of an instruction (for example at T4).
+4. Press **Step** once on `LDA`. It must end at T6 with PC = `1H`. Repeat for `ADD`, `SUB` and `OUT`.
+5. Use **Micro-step** through one full instruction and compare the W-Bus value at each T-state with the table in section 7.
+6. Before pressing Run, the badge must say `PENDING`, not `MISMATCH`.
+7. Data cells (for example `9H`) must show **Data** or **Read**, never **Executed**.
+8. Test other values: `10H + 20H - 05H` gives `25H`, and `05H - 10H` gives `F5H` (2's complement).
+9. Change an address (for example from `8` to `9`), press **Load program**, and confirm the data moves and the old cell returns to `00H`.
 
 ## 10. Team Members
 
